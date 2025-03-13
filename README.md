@@ -12,12 +12,12 @@ This project provides both a web interface and a CLI tool for converting PDF doc
 - Overwrite protection with force option
 
 ## Installation
-
-1. Clone this repository
-2. Install dependencies:
-```bash
-uv sync
-```
+1. [Install UV](https://docs.astral.sh/uv/getting-started/installation/) 
+2. Clone this repository
+3. Install dependencies:
+   ```bash
+   uv sync
+   ```
 
 3. Set up your Mistral API key:
    - Create a `.env` file in the project root
@@ -67,21 +67,3 @@ uv run cli.py convert --help
 - `app.py` - Streamlit web interface
 - `cli.py` - Command line interface
 - `ocr_utils.py` - Shared OCR functionality
-- `output/` - Default output directory for markdown files
-
-## Error Handling
-
-- The tools will warn before overwriting existing files
-- Failed conversions are reported with detailed error messages
-- Progress tracking for bulk operations
-- Temporary files are properly cleaned up
-
-## Requirements
-
-- Python 3.10+
-- Mistral API key
-- Internet connection for OCR processing
-
-## License
-
-MIT
