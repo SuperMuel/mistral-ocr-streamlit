@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 from mistralai import Mistral, OCRResponse
 from dotenv import load_dotenv
@@ -55,24 +56,29 @@ def main():
     st.write("Convert PDFs to markdown using Mistral OCR API")
 
     # API Key handling
-    api_key = st.sidebar.text_input("Enter Mistral API Key", type="password")
-    if not api_key:
-        st.warning("Please enter a valid API key to proceed")
-        return
+    if not (api_key := os.environ.get("MISTRAL_API_KEY")):
+        api_key = st.sidebar.text_input(
+            "Enter Mistral API Key", type="password", key="mistral_api_key"
+        )
+        if not api_key:
+            st.warning("Please enter a valid API key to proceed")
+            return
 
+    print(api_key)
     client = initialize_mistral_client(api_key)
     if not client:
         return
 
-    # Input method selection
-    input_method = st.radio("Choose input method:", ("Upload PDF", "Enter PDF URL"))
+    col1, col2 = st.columns(2)
 
-    if input_method == "Upload PDF":
+    ocr_result = None  # Store the OCR result to display after columns
+
+    with col1:
+        st.subheader("🔗 Upload PDF")
         uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
         if uploaded_file is not None:
-            if st.button("Convert"):
+            if st.button("Convert File", use_container_width=True):
                 with st.spinner("Processing PDF..."):
-                    # Create a temporary file
                     with tempfile.NamedTemporaryFile(
                         suffix=".pdf", delete=False
                     ) as tmp_file:
@@ -80,29 +86,21 @@ def main():
                         tmp_path = Path(tmp_file.name)
 
                     try:
-                        ocr_response = process_pdf_file(client, tmp_path)
-                        display_results(ocr_response)
+                        ocr_result = process_pdf_file(client, tmp_path)
                     finally:
                         # Clean up temporary file
                         tmp_path.unlink()
 
-    else:  # Enter PDF URL
+    with col2:
+        st.subheader("📄 Enter PDF URL")
         pdf_url = st.text_input("Enter PDF URL")
-        if pdf_url and st.button("Convert"):
+        if pdf_url and st.button("Convert URL", use_container_width=True):
             with st.spinner("Processing PDF..."):
-                ocr_response = process_pdf_url(client, pdf_url)
-                display_results(ocr_response)
+                ocr_result = process_pdf_url(client, pdf_url)
 
-    # Instructions
-    st.sidebar.header("Instructions")
-    st.sidebar.write("""
-    1. Enter your Mistral API key
-    2. Choose to either:
-       - Upload a PDF file, or
-       - Enter a PDF URL (e.g., https://arxiv.org/pdf/2201.04234)
-    3. Click 'Convert' to process the PDF
-    4. View the extracted markdown
-    """)
+    # Display results after both columns if we have any
+    if ocr_result:
+        display_results(ocr_result)
 
 
 if __name__ == "__main__":

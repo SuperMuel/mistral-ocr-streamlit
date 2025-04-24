@@ -13,8 +13,7 @@ def process_path(
     input_path: Path, output_dir: Path, force: bool, show_progress: bool = True
 ) -> list[tuple[bool, str]]:
     """Process a single file or directory of PDFs"""
-    client = initialize_mistral_client()
-    if not client:
+    if not (client := initialize_mistral_client()):
         raise typer.Exit(code=1)
 
     results: list[tuple[bool, str]] = []

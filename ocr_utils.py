@@ -8,15 +8,12 @@ load_dotenv()
 
 def initialize_mistral_client(api_key: str | None = None) -> Mistral | None:
     """Initialize and return Mistral client with given API key or from environment"""
-    try:
-        if api_key is None:
-            api_key = os.environ.get("MISTRAL_API_KEY")
-            if not api_key:
-                raise ValueError("No API key provided and none found in environment")
-        return Mistral(api_key=api_key)
-    except Exception as e:
-        print(f"Failed to initialize Mistral client: {str(e)}")
-        return None
+    if not api_key and not (api_key := os.environ.get("MISTRAL_API_KEY")):
+        raise ValueError(
+            "Mistral API key not manually provided and not found in environment"
+        )
+
+    return Mistral(api_key=api_key)
 
 
 def process_pdf_url(
