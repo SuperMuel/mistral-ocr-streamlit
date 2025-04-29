@@ -9,11 +9,19 @@ load_dotenv()
 def initialize_mistral_client(api_key: str | None = None) -> Mistral | None:
     """Initialize and return Mistral client with given API key or from environment"""
     if not api_key and not (api_key := os.environ.get("MISTRAL_API_KEY")):
-        raise ValueError(
-            "Mistral API key not manually provided and not found in environment"
+        # Changed to print warning instead of raising ValueError immediately
+        # to allow Streamlit app to prompt for key if not found.
+        # CLI will handle missing key later if needed.
+        print(
+            "Warning: Mistral API key not manually provided and not found in environment."
         )
+        return None
 
-    return Mistral(api_key=api_key)
+    try:
+        return Mistral(api_key=api_key)
+    except Exception as e:
+        print(f"Error initializing Mistral client: {e}")
+        return None
 
 
 def process_pdf_url(
