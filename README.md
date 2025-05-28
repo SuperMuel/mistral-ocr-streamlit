@@ -10,6 +10,7 @@ This project provides both a CLI tool and a Streamlit web interface for converti
     - Option to force overwrite existing markdown files.
     - Progress bar for directory processing.
     - Read API key from `.env`, environment variable (`MISTRAL_API_KEY`), or command-line option.
+    - Copy extracted markdown to clipboard
 - **Web Interface (Streamlit):**
     - Upload local PDF files.
     - Process PDFs from URLs.
