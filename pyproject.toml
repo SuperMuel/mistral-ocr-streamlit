@@ -11,10 +11,11 @@ requires-python = ">=3.12"
 # Combine dependencies from both CLI and Streamlit parts
 dependencies = [
     "mistralai>=1.5.1",
+    "pyperclip>=1.9.0",
     "python-dotenv>=1.0.1",
     "streamlit>=1.43.1",
     "tqdm>=4.67.1",
-    "typer[rich]>=0.15.2",  # Add [rich] extra for console output formatting
+    "typer[rich]>=0.15.2",
 ]
 
 [project.scripts]
