@@ -299,20 +299,42 @@ def convert(
             console.print(
                 "[blue]Clipboard mode enabled: Content will be copied to clipboard.[/blue]"
             )
-        for action in plan.files:
-            if action.action == "convert":
-                if action.will_overwrite:
-                    console.print(
-                        f"[green]Would overwrite {action.input_path} -> {action.output_path}"
-                    )
-                else:
-                    console.print(
-                        f"[green]Would convert {action.input_path} -> {action.output_path}"
-                    )
-            else:
+
+        to_convert = [
+            a for a in plan.files if a.action == "convert" and not a.will_overwrite
+        ]
+        to_overwrite = [
+            a for a in plan.files if a.action == "convert" and a.will_overwrite
+        ]
+        to_skip = [a for a in plan.files if a.action == "skip"]
+
+        total = len(plan.files)
+        console.print(
+            f"\n[bold]Summary:[/bold] {len(to_convert)} to convert, {len(to_overwrite)} to overwrite, {len(to_skip)} to skip (total: {total})\n"
+        )
+
+        if to_convert:
+            console.print("[bold green]Files to convert:[/bold green]")
+            for action in to_convert:
                 console.print(
-                    f"[yellow]Would skip {action.input_path} -> {action.output_path} ({action.skip_reason})[/yellow]"
+                    f"  [green]{action.input_path}[/green] → [cyan]{action.output_path}[/cyan]"
                 )
+            console.print()
+        if to_overwrite:
+            console.print("[bold yellow]Files to overwrite:[/bold yellow]")
+            for action in to_overwrite:
+                console.print(
+                    f"  [yellow]{action.input_path}[/yellow] → [cyan]{action.output_path}[/cyan] (will overwrite)"
+                )
+            console.print()
+        if to_skip:
+            console.print("[bold]Files to skip:[/bold]")
+            for action in to_skip:
+                console.print(
+                    f"  [dim]{action.input_path}[/dim] → [dim]{action.output_path}[/dim] ([yellow]{action.skip_reason}[/yellow])"
+                )
+            console.print()
+
         console.print("[bold green]Dry run complete.[/bold green]")
         raise typer.Exit(code=0)
 
