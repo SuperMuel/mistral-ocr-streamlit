@@ -27,7 +27,11 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
-dev = ["ruff>=0.9.10"]
+dev = [
+    "coverage>=7.8.2",
+    "pytest>=8.4.0",
+    "ruff>=0.9.10",
+]
 
 # Optional: Ruff configuration if using it
 [tool.ruff]
