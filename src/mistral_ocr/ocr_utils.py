@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Optional, Tuple, List, NamedTuple
+from typing import NamedTuple
 
 import pyperclip
 from dotenv import load_dotenv
@@ -19,7 +19,7 @@ class ProcessedDocument(NamedTuple):
     output_path: Path
 
 
-def initialize_mistral_client(api_key: Optional[str] = None) -> Optional[Mistral]:
+def initialize_mistral_client(api_key: str | None = None) -> Mistral | None:
     """Initialize and return Mistral client with given API key or from environment.
 
     Args:
@@ -34,11 +34,7 @@ def initialize_mistral_client(api_key: Optional[str] = None) -> Optional[Mistral
     if not api_key:
         return None
 
-    try:
-        return Mistral(api_key=api_key)
-    except Exception as e:
-        print(f"Error initializing Mistral client: {e}")
-        return None
+    return Mistral(api_key=api_key)
 
 
 def process_pdf_url(
@@ -141,7 +137,7 @@ def save_markdown_to_file(content: str, output_path: Path) -> None:
 
 def process_and_save_pdf(
     client: Mistral, input_path: Path, output_dir: Path, force: bool = False
-) -> Tuple[bool, str, Optional[ProcessedDocument]]:
+) -> tuple[bool, str, ProcessedDocument | None]:
     """Process a single PDF file and save its markdown output.
 
     Args:
@@ -184,7 +180,7 @@ def process_and_save_pdf(
         return (False, f"Error processing {input_path}: {str(e)}", None)
 
 
-def format_documents_for_clipboard(documents: List[ProcessedDocument]) -> str:
+def format_documents_for_clipboard(documents: list[ProcessedDocument]) -> str:
     """Format processed documents for clipboard copying.
 
     Args:
@@ -200,14 +196,14 @@ def format_documents_for_clipboard(documents: List[ProcessedDocument]) -> str:
         return documents[0].content
 
     # Multiple documents - concatenate with headers and separators
-    formatted_parts = []
+    formatted_parts: list[str] = []
     for doc in documents:
         formatted_parts.append(f"# {doc.filename}\n\n{doc.content}")
 
     return "\n\n---\n\n".join(formatted_parts)
 
 
-def copy_to_clipboard(content: str) -> Tuple[bool, str]:
+def copy_to_clipboard(content: str) -> tuple[bool, str]:
     """Copy content to system clipboard.
 
     Args:
@@ -223,7 +219,7 @@ def copy_to_clipboard(content: str) -> Tuple[bool, str]:
         return False, f"Failed to copy to clipboard: {str(e)}"
 
 
-def handle_clipboard_operation(documents: List[ProcessedDocument]) -> Optional[str]:
+def handle_clipboard_operation(documents: list[ProcessedDocument]) -> str | None:
     """Handle clipboard operation for processed documents.
 
     Args:

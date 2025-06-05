@@ -8,6 +8,7 @@ This project provides both a CLI tool and a Streamlit web interface for converti
     - Process single PDF files or directories.
     - Specify output directory.
     - Option to force overwrite existing markdown files.
+    - Dry run mode to preview which files will be converted or overwritten.
     - Progress bar for directory processing.
     - Read API key from `.env`, environment variable (`MISTRAL_API_KEY`), or command-line option.
     - Copy extracted markdown to clipboard
@@ -81,5 +82,9 @@ mistral-ocr path/to/your/document.pdf -o path/to/output
 # Force overwrite existing markdown files
 mistral-ocr path/to/your/document.pdf -f
 
+# Preview files without converting
+mistral-ocr path/to/your/document.pdf --dry-run
+
 # Provide API key via command line (overrides .env/env var)
 mistral-ocr path/to/document.pdf --api-key sk-yourkeyhere
+

@@ -1,7 +1,6 @@
 """Streamlit web interface for Mistral OCR PDF to Markdown converter."""
 
 import os
-from typing import Optional
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -21,7 +20,7 @@ def process_uploaded_pdf(
     file_content: bytes,
     file_name: str = "uploaded.pdf",
     include_image_base64: bool = False,
-) -> Optional[OCRResponse]:
+) -> OCRResponse | None:
     """Process uploaded PDF file and return OCR results.
 
     Args:
@@ -75,7 +74,7 @@ def display_ocr_results(ocr_response: OCRResponse) -> None:
     st.markdown(f"```markdown\n{markdown_content}\n```")
 
 
-def get_api_key() -> Optional[str]:
+def get_api_key() -> str | None:
     """Get API key from sidebar input or environment.
 
     Returns:
@@ -92,7 +91,7 @@ def get_api_key() -> Optional[str]:
     )
 
 
-def initialize_client_with_key(api_key: str) -> Optional[Mistral]:
+def initialize_client_with_key(api_key: str) -> Mistral | None:
     """Initialize Mistral client with the provided API key.
 
     Args:
@@ -106,7 +105,7 @@ def initialize_client_with_key(api_key: str) -> Optional[Mistral]:
     return initialize_mistral_client(api_key)
 
 
-def handle_file_upload(client: Mistral) -> Optional[OCRResponse]:
+def handle_file_upload(client: Mistral) -> OCRResponse | None:
     """Handle PDF file upload and processing.
 
     Args:
@@ -132,7 +131,7 @@ def handle_file_upload(client: Mistral) -> Optional[OCRResponse]:
     return None
 
 
-def handle_url_input(client: Mistral) -> Optional[OCRResponse]:
+def handle_url_input(client: Mistral) -> OCRResponse | None:
     """Handle PDF URL input and processing.
 
     Args:

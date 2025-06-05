@@ -1,7 +1,10 @@
 """CLI interface for Mistral OCR PDF to Markdown converter."""
 
 from pathlib import Path
-from typing import Annotated, List, Optional, Tuple
+from typing import Annotated, Literal
+
+from mistralai import Mistral
+from pydantic import BaseModel
 
 import typer
 from rich.console import Console
@@ -18,7 +21,52 @@ app = typer.Typer(help="Convert PDF files to Markdown using Mistral OCR")
 console = Console()
 
 
-def find_pdf_files(input_path: Path) -> List[Path]:
+class FileAction(BaseModel):
+    """Represents a planned action for a single PDF file.
+
+    Attributes:
+        input_path: The PDF file to process
+        output_path: Where the markdown output will be saved
+        action: Whether to convert the file or skip it
+        will_overwrite: True if converting will overwrite an existing file
+        skip_reason: Human-readable reason for skipping (only when action="skip")
+    """
+
+    input_path: Path
+    output_path: Path
+    action: Literal["convert", "skip"]
+    will_overwrite: bool = False
+    skip_reason: str | None = None
+
+    def __str__(self) -> str:
+        """Human-readable description of this action."""
+        if self.action == "convert":
+            suffix = " (will overwrite)" if self.will_overwrite else ""
+            return f"Convert: {self.input_path.name} → {self.output_path.name}{suffix}"
+        else:
+            return f"Skip: {self.input_path.name} ({self.skip_reason})"
+
+    @property
+    def is_converting(self) -> bool:
+        """True if this action will convert a file."""
+        return self.action == "convert"
+
+    @property
+    def is_skipping(self) -> bool:
+        """True if this action will skip a file."""
+        return self.action == "skip"
+
+
+class ConversionPlan(BaseModel):
+    """Plan describing how files should be processed."""
+
+    files: list[FileAction]
+    output_dir: Path
+    clipboard: bool = False
+    force: bool = False
+
+
+def find_pdf_files(input_path: Path) -> list[Path]:
     """Find all PDF files in the given path.
 
     Args:
@@ -41,12 +89,12 @@ def find_pdf_files(input_path: Path) -> List[Path]:
 
 
 def process_pdf_files(
-    client,
-    pdf_files: List[Path],
+    client: Mistral,
+    pdf_files: list[Path],
     output_dir: Path,
     force: bool,
     show_progress: bool = True,
-) -> List[Tuple[bool, str, ProcessedDocument]]:
+) -> list[tuple[bool, str, ProcessedDocument]]:
     """Process multiple PDF files.
 
     Args:
@@ -81,7 +129,7 @@ def process_pdf_files(
 
 
 def print_processing_summary(
-    results: List[Tuple[bool, str, ProcessedDocument]],
+    results: list[tuple[bool, str, ProcessedDocument]],
 ) -> None:
     """Print summary of processing results.
 
@@ -92,7 +140,8 @@ def print_processing_summary(
     fail_count = len(results) - success_count
 
     console.print("\n[bold green]Processing Complete[/bold green]")
-    console.print(f"  Successfully processed: [green]{success_count}[/green]")
+    if success_count > 1:
+        console.print(f"  Successfully processed: [green]{success_count}[/green]")
 
     if fail_count > 0:
         console.print(f"  Failed / Skipped: [yellow]{fail_count}[/yellow]")
@@ -107,7 +156,7 @@ def print_processing_summary(
 
 
 def determine_output_directory(
-    input_path: Path, output_dir: Optional[Path] = None
+    input_path: Path, output_dir: Path | None = None
 ) -> Path:
     """Determine the output directory for processed files.
 
@@ -126,13 +175,65 @@ def determine_output_directory(
         return input_path.parent
 
 
+def create_conversion_plan(
+    input_path: Path,
+    output_dir: Path | None,
+    force: bool,
+    clipboard: bool,
+) -> ConversionPlan:
+    """Create a plan describing what actions will be taken."""
+
+    resolved_output_dir = determine_output_directory(input_path, output_dir)
+    pdf_files = find_pdf_files(input_path)
+
+    actions: list[FileAction] = []
+    for pdf_file in pdf_files:
+        output_path = resolved_output_dir / f"{pdf_file.stem}.md"
+        if output_path.exists():
+            if force:
+                actions.append(
+                    FileAction(
+                        input_path=pdf_file,
+                        output_path=output_path,
+                        action="convert",
+                        will_overwrite=True,
+                    )
+                )
+            else:
+                actions.append(
+                    FileAction(
+                        input_path=pdf_file,
+                        output_path=output_path,
+                        action="skip",
+                        will_overwrite=False,
+                        skip_reason="already exists",
+                    )
+                )
+        else:
+            actions.append(
+                FileAction(
+                    input_path=pdf_file,
+                    output_path=output_path,
+                    action="convert",
+                    will_overwrite=False,
+                )
+            )
+
+    return ConversionPlan(
+        files=actions,
+        output_dir=resolved_output_dir,
+        clipboard=clipboard,
+        force=force,
+    )
+
+
 @app.command()
 def convert(
     input_path: Annotated[
         Path, typer.Argument(help="Path to PDF file or directory containing PDFs")
     ],
     output_dir: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option(
             "--output-dir",
             "-o",
@@ -147,20 +248,73 @@ def convert(
         bool,
         typer.Option("--clipboard", "-c", help="Copy converted content to clipboard"),
     ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            "-n",
+            help="Show files that would be converted without processing",
+        ),
+    ] = False,
     api_key: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--api-key",
             help="Mistral API Key (overrides .env)",
             envvar="MISTRAL_API_KEY",
         ),
     ] = None,
-):
+) -> None:
     """Convert PDF files to Markdown using Mistral OCR."""
     # Validate input path
     if not input_path.exists():
         console.print(f"[red]Error: Input path '{input_path}' does not exist.[/red]")
         raise typer.Exit(code=1)
+
+    plan = create_conversion_plan(input_path, output_dir, force, clipboard)
+    resolved_output_dir = plan.output_dir
+    try:
+        resolved_output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        console.print(
+            f"[red]Error creating output directory '{resolved_output_dir}': {e}[/red]"
+        )
+        raise typer.Exit(code=1)
+
+    if not plan.files:
+        console.print(f"[yellow]No PDF files found in {input_path}[/yellow]")
+        raise typer.Exit(code=0)
+
+    if dry_run:
+        console.print(
+            "[bold blue]Dry run mode - no files will be converted.[/bold blue]"
+        )
+        console.print(f"Input: {input_path.resolve()}")
+        console.print(f"Output Directory: {resolved_output_dir.resolve()}")
+        if plan.force:
+            console.print(
+                "[yellow]Force mode enabled: Existing files will be overwritten.[/yellow]"
+            )
+        if plan.clipboard:
+            console.print(
+                "[blue]Clipboard mode enabled: Content will be copied to clipboard.[/blue]"
+            )
+        for action in plan.files:
+            if action.action == "convert":
+                if action.will_overwrite:
+                    console.print(
+                        f"[green]Would overwrite {action.input_path} -> {action.output_path}"
+                    )
+                else:
+                    console.print(
+                        f"[green]Would convert {action.input_path} -> {action.output_path}"
+                    )
+            else:
+                console.print(
+                    f"[yellow]Would skip {action.input_path} -> {action.output_path} ({action.skip_reason})[/yellow]"
+                )
+        console.print("[bold green]Dry run complete.[/bold green]")
+        raise typer.Exit(code=0)
 
     # Initialize Mistral client
     client = initialize_mistral_client(api_key)
@@ -171,42 +325,29 @@ def convert(
         )
         raise typer.Exit(code=1)
 
-    # Determine output directory and create if needed
-    resolved_output_dir = determine_output_directory(input_path, output_dir)
-    try:
-        resolved_output_dir.mkdir(parents=True, exist_ok=True)
-    except OSError as e:
-        console.print(
-            f"[red]Error creating output directory '{resolved_output_dir}': {e}[/red]"
-        )
-        raise typer.Exit(code=1)
-
     # Print configuration
     console.print(f"Input: {input_path.resolve()}")
     console.print(f"Output Directory: {resolved_output_dir.resolve()}")
-    if force:
+    if plan.force:
         console.print(
             "[yellow]Force mode enabled: Existing files will be overwritten.[/yellow]"
         )
-    if clipboard:
+    if plan.clipboard:
         console.print(
             "[blue]Clipboard mode enabled: Content will be copied to clipboard.[/blue]"
         )
 
     try:
-        # Find and process PDF files
-        pdf_files = find_pdf_files(input_path)
-        if not pdf_files:
-            console.print(f"[yellow]No PDF files found in {input_path}[/yellow]")
-            raise typer.Exit(code=0)
-
-        results = process_pdf_files(client, pdf_files, resolved_output_dir, force)
+        pdf_files_to_process = [a.input_path for a in plan.files if a.is_converting]
+        results = process_pdf_files(
+            client, pdf_files_to_process, resolved_output_dir, plan.force
+        )
 
         # Print processing summary
         print_processing_summary(results)
 
         # Handle clipboard operation if requested
-        if clipboard:
+        if plan.clipboard:
             successful_documents = [
                 doc for success, _, doc in results if success and doc
             ]
@@ -222,6 +363,6 @@ def convert(
         raise typer.Exit(code=1)
 
 
-def main():
+def main() -> None:
     """Entry point for the CLI application."""
     app()

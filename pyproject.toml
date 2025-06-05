@@ -27,12 +27,26 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
-dev = [
-    "coverage>=7.8.2",
-    "pytest>=8.4.0",
-    "ruff>=0.9.10",
-]
+dev = ["coverage>=7.8.2", "pytest>=8.4.0", "ruff>=0.9.10"]
 
 # Optional: Ruff configuration if using it
 [tool.ruff]
 exclude = ["*.ipynb"]
+
+
+[tool.ruff.lint]
+select = [
+    "N",  # Enable all pep8-naming rules
+    "E7", # Statements lints
+
+    "UP006", # foo: list[int] = [1, 2, 3] instead of foo: List[int] = [1, 2, 3]
+    "UP007", # Use X | Y for type annotations
+
+    "ANN001", # Checks that function arguments have type annotations.
+    "ANN201", # Missing return type annotation for public function {name}
+
+    "SIM2", # Simplify boolean expressions
+
+    "T20",  # Find uses of 'print' or 'pprint'
+    "F401", # Report unused imports
+]
