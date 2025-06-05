@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import NamedTuple
+from typing import Callable, NamedTuple
 
 import pyperclip
 from dotenv import load_dotenv
@@ -136,7 +136,14 @@ def save_markdown_to_file(content: str, output_path: Path) -> None:
 
 
 def process_and_save_pdf(
-    client: Mistral, input_path: Path, output_dir: Path, force: bool = False
+    client: Mistral,
+    input_path: Path,
+    output_dir: Path,
+    force: bool = False,
+    *,
+    process_func: Callable[[Mistral, Path], OCRResponse] = process_pdf_file,
+    extract_func: Callable[[OCRResponse], str] = extract_markdown_from_response,
+    save_func: Callable[[str, Path], None] = save_markdown_to_file,
 ) -> tuple[bool, str, ProcessedDocument | None]:
     """Process a single PDF file and save its markdown output.
 
@@ -160,9 +167,9 @@ def process_and_save_pdf(
                 None,
             )
 
-        ocr_response = process_pdf_file(client, input_path)
-        markdown_content = extract_markdown_from_response(ocr_response)
-        save_markdown_to_file(markdown_content, output_path)
+        ocr_response = process_func(client, input_path)
+        markdown_content = extract_func(ocr_response)
+        save_func(markdown_content, output_path)
 
         processed_doc = ProcessedDocument(
             filename=input_path.name,
