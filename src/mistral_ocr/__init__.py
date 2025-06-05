@@ -83,7 +83,11 @@ def find_pdf_files(input_path: Path) -> list[Path]:
             return []
 
     if input_path.is_dir():
-        return list(input_path.glob("**/*.pdf"))
+        return [
+            path
+            for path in input_path.rglob("*")
+            if path.suffix.lower() == ".pdf"
+        ]
 
     return []
 
