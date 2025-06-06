@@ -66,6 +66,131 @@ class ConversionPlan(BaseModel):
     force: bool = False
 
 
+class ValidationError(BaseModel):
+    """Represents a validation error."""
+
+    message: str
+    error_code: int = 1
+
+
+class ValidationResult(BaseModel):
+    """Result of validation operations."""
+
+    is_valid: bool
+    errors: list[ValidationError] = []
+
+    @property
+    def error_messages(self) -> list[str]:
+        """Get list of error messages."""
+        return [error.message for error in self.errors]
+
+
+def validate_input_path(input_path: Path) -> ValidationResult:
+    """Validate that the input path exists.
+
+    Args:
+        input_path: Path to validate
+
+    Returns:
+        ValidationResult indicating success or failure
+    """
+    if not input_path.exists():
+        return ValidationResult(
+            is_valid=False,
+            errors=[
+                ValidationError(
+                    message=f"Input path '{input_path}' does not exist.", error_code=1
+                )
+            ],
+        )
+
+    return ValidationResult(is_valid=True)
+
+
+def validate_output_directory_creation(output_dir: Path) -> ValidationResult:
+    """Validate that the output directory can be created.
+
+    Args:
+        output_dir: Output directory path to validate
+
+    Returns:
+        ValidationResult indicating success or failure
+    """
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        return ValidationResult(is_valid=True)
+    except OSError as e:
+        return ValidationResult(
+            is_valid=False,
+            errors=[
+                ValidationError(
+                    message=f"Cannot create output directory '{output_dir}': {e}",
+                    error_code=1,
+                )
+            ],
+        )
+
+
+def validate_conversion_plan(plan: ConversionPlan) -> ValidationResult:
+    """Validate that a conversion plan has files to process.
+
+    Args:
+        plan: ConversionPlan to validate
+
+    Returns:
+        ValidationResult indicating success or failure
+    """
+    if not plan.files:
+        return ValidationResult(
+            is_valid=False,
+            errors=[
+                ValidationError(
+                    message=f"No PDF files found in the input path.",
+                    error_code=0,  # Warning, not error
+                )
+            ],
+        )
+
+    return ValidationResult(is_valid=True)
+
+
+def is_pdf_file(file_path: Path) -> bool:
+    """Check if a file is a PDF file.
+
+    Args:
+        file_path: Path to check
+
+    Returns:
+        True if the file has a .pdf extension
+    """
+    return file_path.suffix.lower() == ".pdf"
+
+
+def find_pdf_files_pure(input_path: Path) -> tuple[list[Path], list[str]]:
+    """Find all PDF files in the given path, returning both files and warnings.
+
+    Args:
+        input_path: Path to search for PDF files
+
+    Returns:
+        Tuple of (pdf_files, warnings)
+    """
+    warnings = []
+
+    if input_path.is_file():
+        if is_pdf_file(input_path):
+            return [input_path], warnings
+        else:
+            warnings.append(f"Warning: {input_path} is not a PDF file")
+            return [], warnings
+
+    if input_path.is_dir():
+        pdf_files = list(input_path.glob("**/*.pdf"))
+        return pdf_files, warnings
+
+    return [], warnings
+
+
 def find_pdf_files(input_path: Path) -> list[Path]:
     """Find all PDF files in the given path.
 
@@ -75,17 +200,13 @@ def find_pdf_files(input_path: Path) -> list[Path]:
     Returns:
         List of PDF file paths
     """
-    if input_path.is_file():
-        if input_path.suffix.lower() == ".pdf":
-            return [input_path]
-        else:
-            console.print(f"[yellow]Warning: {input_path} is not a PDF file[/yellow]")
-            return []
+    pdf_files, warnings = find_pdf_files_pure(input_path)
 
-    if input_path.is_dir():
-        return list(input_path.glob("**/*.pdf"))
+    # Handle side effects
+    for warning in warnings:
+        console.print(f"[yellow]{warning}[/yellow]")
 
-    return []
+    return pdf_files
 
 
 def process_pdf_files(
@@ -175,6 +296,97 @@ def determine_output_directory(
         return input_path.parent
 
 
+def calculate_output_path(pdf_file: Path, input_path: Path, output_dir: Path) -> Path:
+    """Calculate the output path for a PDF file.
+
+    Args:
+        pdf_file: The PDF file to process
+        input_path: The original input path (file or directory)
+        output_dir: The resolved output directory
+
+    Returns:
+        The calculated output path for the markdown file
+    """
+    if input_path.is_dir():
+        # Preserve directory structure: compute path relative to input directory
+        rel_pdf = pdf_file.relative_to(input_path)
+        rel_md = rel_pdf.with_suffix(".md")
+        return output_dir / rel_md
+    else:
+        # Single file: place at root of output directory
+        return output_dir / f"{pdf_file.stem}.md"
+
+
+def create_file_action(pdf_file: Path, output_path: Path, force: bool) -> FileAction:
+    """Create a file action based on whether the output file exists.
+
+    Args:
+        pdf_file: The PDF file to process
+        output_path: The calculated output path
+        force: Whether to overwrite existing files
+
+    Returns:
+        A FileAction describing what should be done
+    """
+    if output_path.exists():
+        if force:
+            return FileAction(
+                input_path=pdf_file,
+                output_path=output_path,
+                action="convert",
+                will_overwrite=True,
+            )
+        else:
+            return FileAction(
+                input_path=pdf_file,
+                output_path=output_path,
+                action="skip",
+                will_overwrite=False,
+                skip_reason="already exists",
+            )
+    else:
+        return FileAction(
+            input_path=pdf_file,
+            output_path=output_path,
+            action="convert",
+            will_overwrite=False,
+        )
+
+
+def create_conversion_plan_pure(
+    pdf_files: list[Path],
+    input_path: Path,
+    output_dir: Path,
+    force: bool,
+    clipboard: bool,
+) -> ConversionPlan:
+    """Create a conversion plan from a list of PDF files (pure function).
+
+    Args:
+        pdf_files: List of PDF files to process
+        input_path: Original input path
+        output_dir: Resolved output directory
+        force: Whether to overwrite existing files
+        clipboard: Whether to copy to clipboard
+
+    Returns:
+        ConversionPlan describing what actions to take
+    """
+    actions: list[FileAction] = []
+
+    for pdf_file in pdf_files:
+        output_path = calculate_output_path(pdf_file, input_path, output_dir)
+        action = create_file_action(pdf_file, output_path, force)
+        actions.append(action)
+
+    return ConversionPlan(
+        files=actions,
+        output_dir=output_dir,
+        clipboard=clipboard,
+        force=force,
+    )
+
+
 def create_conversion_plan(
     input_path: Path,
     output_dir: Path | None,
@@ -186,44 +398,12 @@ def create_conversion_plan(
     resolved_output_dir = determine_output_directory(input_path, output_dir)
     pdf_files = find_pdf_files(input_path)
 
-    actions: list[FileAction] = []
-    for pdf_file in pdf_files:
-        output_path = resolved_output_dir / f"{pdf_file.stem}.md"
-        if output_path.exists():
-            if force:
-                actions.append(
-                    FileAction(
-                        input_path=pdf_file,
-                        output_path=output_path,
-                        action="convert",
-                        will_overwrite=True,
-                    )
-                )
-            else:
-                actions.append(
-                    FileAction(
-                        input_path=pdf_file,
-                        output_path=output_path,
-                        action="skip",
-                        will_overwrite=False,
-                        skip_reason="already exists",
-                    )
-                )
-        else:
-            actions.append(
-                FileAction(
-                    input_path=pdf_file,
-                    output_path=output_path,
-                    action="convert",
-                    will_overwrite=False,
-                )
-            )
-
-    return ConversionPlan(
-        files=actions,
+    return create_conversion_plan_pure(
+        pdf_files=pdf_files,
+        input_path=input_path,
         output_dir=resolved_output_dir,
-        clipboard=clipboard,
         force=force,
+        clipboard=clipboard,
     )
 
 
@@ -267,30 +447,37 @@ def convert(
 ) -> None:
     """Convert PDF files to Markdown using Mistral OCR."""
     # Validate input path
-    if not input_path.exists():
-        console.print(f"[red]Error: Input path '{input_path}' does not exist.[/red]")
-        raise typer.Exit(code=1)
+    input_validation = validate_input_path(input_path)
+    if not input_validation.is_valid:
+        for error in input_validation.errors:
+            console.print(f"[red]Error: {error.message}[/red]")
+            raise typer.Exit(code=error.error_code)
 
     plan = create_conversion_plan(input_path, output_dir, force, clipboard)
-    resolved_output_dir = plan.output_dir
-    try:
-        resolved_output_dir.mkdir(parents=True, exist_ok=True)
-    except OSError as e:
-        console.print(
-            f"[red]Error creating output directory '{resolved_output_dir}': {e}[/red]"
-        )
-        raise typer.Exit(code=1)
 
-    if not plan.files:
-        console.print(f"[yellow]No PDF files found in {input_path}[/yellow]")
-        raise typer.Exit(code=0)
+    # Validate output directory creation
+    output_validation = validate_output_directory_creation(plan.output_dir)
+    if not output_validation.is_valid:
+        for error in output_validation.errors:
+            console.print(f"[red]Error: {error.message}[/red]")
+            raise typer.Exit(code=error.error_code)
+
+    # Validate conversion plan
+    plan_validation = validate_conversion_plan(plan)
+    if not plan_validation.is_valid:
+        for error in plan_validation.errors:
+            if error.error_code == 0:  # Warning
+                console.print(f"[yellow]{error.message}[/yellow]")
+            else:
+                console.print(f"[red]Error: {error.message}[/red]")
+            raise typer.Exit(code=error.error_code)
 
     if dry_run:
         console.print(
             "[bold blue]Dry run mode - no files will be converted.[/bold blue]"
         )
         console.print(f"Input: {input_path.resolve()}")
-        console.print(f"Output Directory: {resolved_output_dir.resolve()}")
+        console.print(f"Output Directory: {plan.output_dir.resolve()}")
         if plan.force:
             console.print(
                 "[yellow]Force mode enabled: Existing files will be overwritten.[/yellow]"
@@ -349,7 +536,7 @@ def convert(
 
     # Print configuration
     console.print(f"Input: {input_path.resolve()}")
-    console.print(f"Output Directory: {resolved_output_dir.resolve()}")
+    console.print(f"Output Directory: {plan.output_dir.resolve()}")
     if plan.force:
         console.print(
             "[yellow]Force mode enabled: Existing files will be overwritten.[/yellow]"
@@ -362,7 +549,7 @@ def convert(
     try:
         pdf_files_to_process = [a.input_path for a in plan.files if a.is_converting]
         results = process_pdf_files(
-            client, pdf_files_to_process, resolved_output_dir, plan.force
+            client, pdf_files_to_process, plan.output_dir, plan.force
         )
 
         # Print processing summary

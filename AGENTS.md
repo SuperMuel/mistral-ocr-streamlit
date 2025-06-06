@@ -33,6 +33,7 @@ Testing
 - Write testable code by minimizing patching. Favor Dependency Injection (DI).
 - Use `pytest.mark.parametrize` when testing multiple inputs
 - Use `uv run python -m pytest --cov` for coverage reports
+- **E2E tests**: `uv run pytest tests/test_e2e.py -v` (requires `MISTRAL_API_KEY` in `.env`)
 
 
 Dependency and project management using UV (replaces pip, pip-tools, poetry...)
