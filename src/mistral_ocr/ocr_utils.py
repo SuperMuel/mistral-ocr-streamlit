@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import NamedTuple
 
-import pyperclip
+import pyperclip  # type: ignore[import-untyped]
 from dotenv import load_dotenv
 from mistralai import Mistral, OCRResponse
 
@@ -213,7 +213,7 @@ def copy_to_clipboard(content: str) -> tuple[bool, str]:
         Tuple of (success, message)
     """
     try:
-        pyperclip.copy(content)
+        pyperclip.copy(content)  # type: ignore[no-untyped-call]
         return True, "Successfully copied to clipboard"
     except Exception as e:
         return False, f"Failed to copy to clipboard: {str(e)}"

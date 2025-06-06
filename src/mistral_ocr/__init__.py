@@ -175,7 +175,7 @@ def find_pdf_files_pure(input_path: Path) -> tuple[list[Path], list[str]]:
     Returns:
         Tuple of (pdf_files, warnings)
     """
-    warnings = []
+    warnings: list[str] = []
 
     if input_path.is_file():
         if is_pdf_file(input_path):
@@ -215,7 +215,7 @@ def process_pdf_files(
     output_dir: Path,
     force: bool,
     show_progress: bool = True,
-) -> list[tuple[bool, str, ProcessedDocument]]:
+) -> list[tuple[bool, str, ProcessedDocument | None]]:
     """Process multiple PDF files.
 
     Args:
@@ -232,7 +232,7 @@ def process_pdf_files(
         console.print("[yellow]No PDF files found to process[/yellow]")
         return []
 
-    results = []
+    results: list[tuple[bool, str, ProcessedDocument | None]] = []
     iterator = pdf_files
 
     if show_progress and len(pdf_files) > 1:
@@ -250,7 +250,7 @@ def process_pdf_files(
 
 
 def print_processing_summary(
-    results: list[tuple[bool, str, ProcessedDocument]],
+    results: list[tuple[bool, str, ProcessedDocument | None]],
 ) -> None:
     """Print summary of processing results.
 

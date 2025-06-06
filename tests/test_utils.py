@@ -23,7 +23,7 @@ def create_test_pdfs(base_dir: Path) -> dict[str, str]:
         "archive/2024/annual_review.pdf": "Company annual performance review and goals.",
     }
 
-    expected_content = {}
+    expected_content: dict[str, str] = {}
 
     for relative_path, content in test_files.items():
         file_path = base_dir / relative_path
