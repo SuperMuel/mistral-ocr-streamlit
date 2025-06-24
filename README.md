@@ -88,3 +88,58 @@ mistral-ocr path/to/your/document.pdf --dry-run
 # Provide API key via command line (overrides .env/env var)
 mistral-ocr path/to/document.pdf --api-key sk-yourkeyhere
 
+
+```
+
+### Streamlit Web Interface
+
+Start the Streamlit app:
+
+```bash
+uv run streamlit run src/mistral_ocr/app.py
+```
+
+Navigate to the URL shown in the terminal (usually `http://localhost:8501`).
+
+## Development
+
+### Setup Development Environment
+
+1. **Clone and install with development dependencies:**
+   ```bash
+   git clone https://github.com/SuperMuel/mistral-ocr-streamlit mistral-ocr
+   cd mistral-ocr
+   uv sync
+   ```
+
+### Testing
+
+The project uses `pytest` with two categories of tests:
+
+- **Unit Tests**: Fast tests that don't require external API calls
+- **End-to-End (E2E) Tests**: Integration tests that require a valid Mistral API key
+
+#### Running Tests
+
+```bash
+# Run only unit tests (default behavior)
+uv run pytest
+
+# Run only e2e tests
+uv run pytest -m e2e
+```
+
+### Code Quality
+
+The project uses `ruff` for linting and formatting:
+
+```bash
+# Check code quality
+uv run ruff check
+
+# Auto-fix issues
+uv run ruff check --fix
+
+# Format code
+uv run ruff format
+```
