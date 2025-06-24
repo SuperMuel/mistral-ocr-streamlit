@@ -30,6 +30,7 @@ def api_key() -> str:
     return key
 
 
+@pytest.mark.e2e
 class TestSingleFileProcessing:
     """Test processing single PDF files."""
 
@@ -82,6 +83,7 @@ class TestSingleFileProcessing:
         assert "custom output" in content.lower()
 
 
+@pytest.mark.e2e
 class TestDirectoryProcessing:
     """Test processing directories with multiple PDF files."""
 
@@ -138,6 +140,7 @@ class TestDirectoryProcessing:
             assert md_path.exists(), f"Output file not created: {md_path}"
 
 
+@pytest.mark.e2e
 class TestDryRunMode:
     """Test dry run functionality."""
 
@@ -198,6 +201,7 @@ class TestDryRunMode:
             assert not md_path.exists(), f"File was created during dry run: {md_path}"
 
 
+@pytest.mark.e2e
 class TestErrorHandling:
     """Test error handling scenarios."""
 
@@ -215,6 +219,7 @@ class TestErrorHandling:
         assert "not found" in result.stdout.lower() or "error" in result.stdout.lower()
 
 
+@pytest.mark.e2e
 class TestClipboardFeature:
     """Test clipboard functionality."""
 

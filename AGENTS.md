@@ -1,7 +1,9 @@
 - You use Python 3.12
 - Prefer Pydantic models over raw dictionaries for input validation.
+- Make invalid states unrepresentable.
 - You like functional, declarative programming. Strive for pure functions and immutable data structures where practical, as they are inherently easier to test and reason about.
 - Respect the Single Responsibility Principle (SRP)
+
 
 
 Error Handling and Validation
