@@ -16,6 +16,7 @@ from .ocr_utils import (
     handle_clipboard_operation,
     ProcessedDocument,
 )
+from .cache_utils import Cache
 
 app = typer.Typer(help="Convert PDF files to Markdown using Mistral OCR")
 console = Console()
@@ -214,6 +215,7 @@ def process_pdf_files(
     pdf_files: list[Path],
     output_dir: Path,
     force: bool,
+    cache: Cache | None,
     show_progress: bool = True,
 ) -> list[tuple[bool, str, ProcessedDocument | None]]:
     """Process multiple PDF files.
@@ -243,8 +245,15 @@ def process_pdf_files(
             if isinstance(iterator, tqdm):
                 iterator.set_description(f"Processing {pdf_file.name}")  # type: ignore
 
-        result = process_and_save_pdf(client, pdf_file, output_dir, force)
+        result = process_and_save_pdf(client, pdf_file, output_dir, force, cache)
         results.append(result)
+        success, message, doc = result
+        if success and doc and doc.from_cache:
+            console.print(f"✓ {pdf_file.name} (cached)")
+        elif success:
+            console.print(f"⟳ {pdf_file.name} (processing...)")
+        else:
+            console.print(f"✗ {pdf_file.name}: {message}")
 
     return results
 
@@ -258,11 +267,17 @@ def print_processing_summary(
         results: List of processing results
     """
     success_count = sum(1 for success, _, _ in results if success)
+    cache_count = sum(
+        1 for success, _, doc in results if success and doc and doc.from_cache
+    )
     fail_count = len(results) - success_count
 
     console.print("\n[bold green]Processing Complete[/bold green]")
-    if success_count > 1:
+    if success_count:
         console.print(f"  Successfully processed: [green]{success_count}[/green]")
+        if cache_count:
+            console.print(f"  From cache: [green]{cache_count}[/green]")
+        console.print(f"  API calls made: [green]{success_count - cache_count}[/green]")
 
     if fail_count > 0:
         console.print(f"  Failed / Skipped: [yellow]{fail_count}[/yellow]")
@@ -444,6 +459,18 @@ def convert(
             envvar="MISTRAL_API_KEY",
         ),
     ] = None,
+    no_cache: Annotated[
+        bool,
+        typer.Option("--no-cache", help="Disable local cache"),
+    ] = False,
+    clear_cache: Annotated[
+        bool,
+        typer.Option("--clear-cache", help="Delete all cached entries and exit"),
+    ] = False,
+    cache_stats: Annotated[
+        bool,
+        typer.Option("--cache-stats", help="Show cache statistics and exit"),
+    ] = False,
 ) -> None:
     """Convert PDF files to Markdown using Mistral OCR."""
     # Validate input path
@@ -471,6 +498,21 @@ def convert(
             else:
                 console.print(f"[red]Error: {error.message}[/red]")
             raise typer.Exit(code=error.error_code)
+
+    cache = Cache(enabled=not no_cache)
+    if clear_cache:
+        cache.clear()
+        console.print("Cache cleared")
+        raise typer.Exit(code=0)
+    if cache_stats:
+        stats = cache.stats()
+        console.print("Cache statistics:")
+        console.print(f"  Total entries: {stats.get('total_entries', 0)}")
+        console.print(f"  Total size: {stats.get('total_size', 0)} bytes")
+        if stats:
+            console.print(f"  Oldest: {stats.get('oldest', '')}")
+            console.print(f"  Newest: {stats.get('newest', '')}")
+        raise typer.Exit(code=0)
 
     if dry_run:
         console.print(
@@ -549,7 +591,11 @@ def convert(
     try:
         pdf_files_to_process = [a.input_path for a in plan.files if a.is_converting]
         results = process_pdf_files(
-            client, pdf_files_to_process, plan.output_dir, plan.force
+            client,
+            pdf_files_to_process,
+            plan.output_dir,
+            plan.force,
+            cache,
         )
 
         # Print processing summary
