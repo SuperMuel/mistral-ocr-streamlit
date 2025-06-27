@@ -1,5 +1,5 @@
 from pathlib import Path
-from datetime import datetime
+from datetime import UTC, datetime
 
 from mistral_ocr.cache_utils import Cache, CacheEntry, compute_pdf_hash
 from tests.test_utils import create_single_test_pdf
@@ -21,8 +21,8 @@ def test_cache_store_and_retrieve(tmp_path: Path) -> None:
         source_path="/tmp/a.pdf",
         size_bytes=10,
         markdown_content="content",
-        created_at=datetime.utcnow().isoformat(),
-        last_accessed=datetime.utcnow().isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
+        last_accessed=datetime.now(UTC).isoformat(),
         mistral_model="test",
     )
     cache.set(entry)
@@ -39,12 +39,11 @@ def test_cache_clear(tmp_path: Path) -> None:
         source_path="/tmp/a.pdf",
         size_bytes=10,
         markdown_content="content",
-        created_at=datetime.utcnow().isoformat(),
-        last_accessed=datetime.utcnow().isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
+        last_accessed=datetime.now(UTC).isoformat(),
         mistral_model="test",
     )
     cache.set(entry)
     cache.clear()
     stats = cache.stats()
     assert stats.get("total_entries", 0) == 0
-

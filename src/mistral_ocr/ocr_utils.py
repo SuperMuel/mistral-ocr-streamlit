@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from datetime import datetime
+from datetime import UTC, datetime
 from pydantic import BaseModel
 
 from .cache_utils import Cache, CacheEntry, compute_pdf_hash
@@ -203,8 +203,8 @@ def process_and_save_pdf(
                 source_path=str(input_path),
                 size_bytes=input_path.stat().st_size,
                 markdown_content=markdown_content,
-                created_at=datetime.utcnow().isoformat(),
-                last_accessed=datetime.utcnow().isoformat(),
+                created_at=datetime.now(UTC).isoformat(),
+                last_accessed=datetime.now(UTC).isoformat(),
                 mistral_model="mistral-ocr-latest",
             )
             cache.set(entry)

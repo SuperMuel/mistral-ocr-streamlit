@@ -3,7 +3,7 @@ from __future__ import annotations
 """Utilities for caching OCR results locally."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 import hashlib
 import sqlite3
@@ -90,7 +90,7 @@ class Cache:
             entry = CacheEntry(*row)
             conn.execute(
                 "UPDATE cache_entries SET last_accessed=? WHERE pdf_hash=?",
-                (datetime.utcnow().isoformat(), pdf_hash),
+                (datetime.now(UTC).isoformat(), pdf_hash),
             )
             return entry
 
@@ -151,4 +151,3 @@ def compute_pdf_hash(file_path: Path) -> str:
         for chunk in iter(lambda: f.read(8192), b""):
             hasher.update(chunk)
     return hasher.hexdigest()
-
