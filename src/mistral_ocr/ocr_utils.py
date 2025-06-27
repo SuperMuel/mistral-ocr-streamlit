@@ -2,7 +2,10 @@
 
 import os
 from pathlib import Path
-from typing import NamedTuple
+from datetime import UTC, datetime
+from pydantic import BaseModel
+
+from .cache_utils import Cache, CacheEntry, compute_pdf_hash
 
 import pyperclip  # type: ignore[import-untyped]
 from dotenv import load_dotenv
@@ -11,12 +14,13 @@ from mistralai import Mistral, OCRResponse
 load_dotenv()
 
 
-class ProcessedDocument(NamedTuple):
+class ProcessedDocument(BaseModel):
     """Represents a successfully processed document."""
 
     filename: str
     content: str
     output_path: Path
+    from_cache: bool = False
 
 
 def initialize_mistral_client(api_key: str | None = None) -> Mistral | None:
@@ -136,7 +140,11 @@ def save_markdown_to_file(content: str, output_path: Path) -> None:
 
 
 def process_and_save_pdf(
-    client: Mistral, input_path: Path, output_dir: Path, force: bool = False
+    client: Mistral,
+    input_path: Path,
+    output_dir: Path,
+    force: bool = False,
+    cache: Cache | None = None,
 ) -> tuple[bool, str, ProcessedDocument | None]:
     """Process a single PDF file and save its markdown output.
 
@@ -160,6 +168,23 @@ def process_and_save_pdf(
                 None,
             )
 
+        pdf_hash = compute_pdf_hash(input_path)
+        if cache:
+            cached = cache.get(pdf_hash)
+            if cached:
+                save_markdown_to_file(cached.markdown_content, output_path)
+                processed_doc = ProcessedDocument(
+                    filename=input_path.name,
+                    content=cached.markdown_content,
+                    output_path=output_path,
+                    from_cache=True,
+                )
+                return (
+                    True,
+                    f"{input_path} (cached)",
+                    processed_doc,
+                )
+
         ocr_response = process_pdf_file(client, input_path)
         markdown_content = extract_markdown_from_response(ocr_response)
         save_markdown_to_file(markdown_content, output_path)
@@ -168,7 +193,21 @@ def process_and_save_pdf(
             filename=input_path.name,
             content=markdown_content,
             output_path=output_path,
+            from_cache=False,
         )
+
+        if cache:
+            entry = CacheEntry(
+                pdf_hash=pdf_hash,
+                filename=input_path.name,
+                source_path=str(input_path),
+                size_bytes=input_path.stat().st_size,
+                markdown_content=markdown_content,
+                created_at=datetime.now(UTC).isoformat(),
+                last_accessed=datetime.now(UTC).isoformat(),
+                mistral_model="mistral-ocr-latest",
+            )
+            cache.set(entry)
 
         return (
             True,

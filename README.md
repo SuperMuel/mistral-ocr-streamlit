@@ -10,6 +10,7 @@ This project provides both a CLI tool and a Streamlit web interface for converti
     - Option to force overwrite existing markdown files.
     - Dry run mode to preview which files will be converted or overwritten.
     - Progress bar for directory processing.
+    - Local cache to avoid re-processing identical PDFs (disable with `--no-cache`).
     - Read API key from `.env`, environment variable (`MISTRAL_API_KEY`), or command-line option.
     - Copy extracted markdown to clipboard
 - **Web Interface (Streamlit):**
