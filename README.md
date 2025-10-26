@@ -1,23 +1,23 @@
-# Mistral OCR PDF to Markdown Converter
+# Mistral OCR Document to Markdown Converter
 
-This project provides both a CLI tool and a Streamlit web interface for converting PDF documents to Markdown format using the Mistral OCR API. It can process single files or entire directories of PDFs.
+This project provides both a CLI tool and a Streamlit web interface for converting PDFs and images to Markdown format using the Mistral OCR API. It can process single files or entire directories of supported documents.
 
 ## Features
 
 - **CLI Tool:**
-    - Process single PDF files or directories.
+  - Process single documents (PDFs or images) or entire directories.
     - Specify output directory.
     - Option to force overwrite existing markdown files.
     - Dry run mode to preview which files will be converted or overwritten.
     - Progress bar for directory processing.
-    - Local cache to avoid re-processing identical PDFs (disable with `--no-cache`).
-    - Read API key from `.env`, environment variable (`MISTRAL_API_KEY`), or command-line option.
-    - Copy extracted markdown to clipboard
+  - Local cache to avoid re-processing identical documents (disable with `--no-cache`).
+  - Read API key from `.env`, environment variable (`MISTRAL_API_KEY`), or command-line option.
+  - Copy extracted markdown to clipboard
 - **Web Interface (Streamlit):**
-    - Upload local PDF files.
-    - Process PDFs from URLs.
-    - Enter API key directly in the interface (also reads from `.env`/environment).
-    - View extracted markdown.
+  - Upload local PDFs or images.
+  - Process PDFs or images from URLs.
+  - Enter API key directly in the interface (also reads from `.env`/environment).
+  - View extracted markdown.
 
 ## Installation
 
@@ -71,10 +71,10 @@ uv run mistral-ocr --help
 
 # --- Examples ---
 
-# Convert a single PDF file (output to same directory)
+# Convert a single document (output to same directory)
 mistral-ocr path/to/your/document.pdf
 
-# Convert a directory of PDFs (output to same directory)
+# Convert a directory of documents (output to same directory)
 mistral-ocr path/to/pdf_folder/
 
 # Specify output directory

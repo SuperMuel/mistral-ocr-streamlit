@@ -1,4 +1,4 @@
-"""CLI interface for Mistral OCR PDF to Markdown converter."""
+"""CLI interface for Mistral OCR document (PDF/image) to Markdown converter."""
 
 from pathlib import Path
 from typing import Annotated, Literal
@@ -11,22 +11,25 @@ from rich.console import Console
 from tqdm import tqdm
 
 from .ocr_utils import (
-    initialize_mistral_client,
-    process_and_save_pdf,
-    handle_clipboard_operation,
     ProcessedDocument,
+    detect_document_kind_from_path,
+    handle_clipboard_operation,
+    initialize_mistral_client,
+    process_and_save_document,
 )
 from .cache_utils import Cache
 
-app = typer.Typer(help="Convert PDF files to Markdown using Mistral OCR")
+app = typer.Typer(
+    help="Convert documents (PDFs and images) to Markdown using Mistral OCR"
+)
 console = Console()
 
 
 class FileAction(BaseModel):
-    """Represents a planned action for a single PDF file.
+    """Represents a planned action for a single document.
 
     Attributes:
-        input_path: The PDF file to process
+        input_path: The document to process
         output_path: Where the markdown output will be saved
         action: Whether to convert the file or skip it
         will_overwrite: True if converting will overwrite an existing file
@@ -146,7 +149,7 @@ def validate_conversion_plan(plan: ConversionPlan) -> ValidationResult:
             is_valid=False,
             errors=[
                 ValidationError(
-                    message=f"No PDF files found in the input path.",
+                    message="No supported documents found in the input path.",
                     error_code=0,  # Warning, not error
                 )
             ],
@@ -155,105 +158,85 @@ def validate_conversion_plan(plan: ConversionPlan) -> ValidationResult:
     return ValidationResult(is_valid=True)
 
 
-def is_pdf_file(file_path: Path) -> bool:
-    """Check if a file is a PDF file.
+def is_supported_document(file_path: Path) -> bool:
+    """Check whether a path points to a supported document type."""
 
-    Args:
-        file_path: Path to check
-
-    Returns:
-        True if the file has a .pdf extension
-    """
-    return file_path.suffix.lower() == ".pdf"
+    return detect_document_kind_from_path(file_path) is not None
 
 
-def find_pdf_files_pure(input_path: Path) -> tuple[list[Path], list[str]]:
-    """Find all PDF files in the given path, returning both files and warnings.
+def find_supported_documents_pure(
+    input_path: Path,
+) -> tuple[list[Path], list[str]]:
+    """Find supported documents in the given path, returning files and warnings."""
 
-    Args:
-        input_path: Path to search for PDF files
-
-    Returns:
-        Tuple of (pdf_files, warnings)
-    """
     warnings: list[str] = []
 
     if input_path.is_file():
-        if is_pdf_file(input_path):
+        if is_supported_document(input_path):
             return [input_path], warnings
-        else:
-            warnings.append(f"Warning: {input_path} is not a PDF file")
-            return [], warnings
+        warnings.append(f"Warning: {input_path} is not a supported document")
+        return [], warnings
 
     if input_path.is_dir():
-        pdf_files = list(input_path.glob("**/*.pdf"))
-        return pdf_files, warnings
+        documents = [
+            candidate
+            for candidate in input_path.rglob("*")
+            if candidate.is_file() and is_supported_document(candidate)
+        ]
+        return documents, warnings
 
     return [], warnings
 
 
-def find_pdf_files(input_path: Path) -> list[Path]:
-    """Find all PDF files in the given path.
+def find_supported_documents(input_path: Path) -> list[Path]:
+    """Find all supported document files in the given path."""
 
-    Args:
-        input_path: Path to search for PDF files
+    documents, warnings = find_supported_documents_pure(input_path)
 
-    Returns:
-        List of PDF file paths
-    """
-    pdf_files, warnings = find_pdf_files_pure(input_path)
-
-    # Handle side effects
     for warning in warnings:
         console.print(f"[yellow]{warning}[/yellow]")
 
-    return pdf_files
+    return documents
 
 
-def process_pdf_files(
+def process_documents(
     client: Mistral,
-    pdf_files: list[Path],
+    document_paths: list[Path],
     output_dir: Path,
     force: bool,
     cache: Cache | None,
     show_progress: bool = True,
 ) -> list[tuple[bool, str, ProcessedDocument | None]]:
-    """Process multiple PDF files.
+    """Process multiple supported documents."""
 
-    Args:
-        client: Initialized Mistral client
-        pdf_files: List of PDF files to process
-        output_dir: Output directory for markdown files
-        force: Whether to overwrite existing files
-        show_progress: Whether to show progress bar
-
-    Returns:
-        List of processing results
-    """
-    if not pdf_files:
-        console.print("[yellow]No PDF files found to process[/yellow]")
+    if not document_paths:
+        console.print("[yellow]No supported documents found to process[/yellow]")
         return []
 
     results: list[tuple[bool, str, ProcessedDocument | None]] = []
-    iterator = pdf_files
+    iterator = document_paths
 
-    if show_progress and len(pdf_files) > 1:
-        iterator = tqdm(pdf_files, desc="Processing PDFs")
+    if show_progress and len(document_paths) > 1:
+        iterator = tqdm(document_paths, desc="Processing documents")
 
-    for pdf_file in iterator:
-        if show_progress and len(pdf_files) > 1:
+    for document_path in iterator:
+        if show_progress and len(document_paths) > 1:
             if isinstance(iterator, tqdm):
-                iterator.set_description(f"Processing {pdf_file.name}")  # type: ignore
+                iterator.set_description(  # type: ignore[attr-defined]
+                    f"Processing {document_path.name}"
+                )
 
-        result = process_and_save_pdf(client, pdf_file, output_dir, force, cache)
+        result = process_and_save_document(
+            client, document_path, output_dir, force, cache
+        )
         results.append(result)
         success, message, doc = result
         if success and doc and doc.from_cache:
-            console.print(f"✓ {pdf_file.name} (cached)")
+            console.print(f"✓ {document_path.name} (cached)")
         elif success:
-            console.print(f"⟳ {pdf_file.name} (processing...)")
+            console.print(f"⟳ {document_path.name} (processing...)")
         else:
-            console.print(f"✗ {pdf_file.name}: {message}")
+            console.print(f"✗ {document_path.name}: {message}")
 
     return results
 
@@ -311,11 +294,13 @@ def determine_output_directory(
         return input_path.parent
 
 
-def calculate_output_path(pdf_file: Path, input_path: Path, output_dir: Path) -> Path:
-    """Calculate the output path for a PDF file.
+def calculate_output_path(
+    document_path: Path, input_path: Path, output_dir: Path
+) -> Path:
+    """Calculate the output path for a document.
 
     Args:
-        pdf_file: The PDF file to process
+        document_path: The document to process
         input_path: The original input path (file or directory)
         output_dir: The resolved output directory
 
@@ -324,19 +309,19 @@ def calculate_output_path(pdf_file: Path, input_path: Path, output_dir: Path) ->
     """
     if input_path.is_dir():
         # Preserve directory structure: compute path relative to input directory
-        rel_pdf = pdf_file.relative_to(input_path)
+        rel_pdf = document_path.relative_to(input_path)
         rel_md = rel_pdf.with_suffix(".md")
         return output_dir / rel_md
     else:
         # Single file: place at root of output directory
-        return output_dir / f"{pdf_file.stem}.md"
+        return output_dir / f"{document_path.stem}.md"
 
 
-def create_file_action(pdf_file: Path, output_path: Path, force: bool) -> FileAction:
+def create_file_action(document_path: Path, output_path: Path, force: bool) -> FileAction:
     """Create a file action based on whether the output file exists.
 
     Args:
-        pdf_file: The PDF file to process
+        document_path: The document to process
         output_path: The calculated output path
         force: Whether to overwrite existing files
 
@@ -346,14 +331,14 @@ def create_file_action(pdf_file: Path, output_path: Path, force: bool) -> FileAc
     if output_path.exists():
         if force:
             return FileAction(
-                input_path=pdf_file,
+                input_path=document_path,
                 output_path=output_path,
                 action="convert",
                 will_overwrite=True,
             )
         else:
             return FileAction(
-                input_path=pdf_file,
+                input_path=document_path,
                 output_path=output_path,
                 action="skip",
                 will_overwrite=False,
@@ -361,7 +346,7 @@ def create_file_action(pdf_file: Path, output_path: Path, force: bool) -> FileAc
             )
     else:
         return FileAction(
-            input_path=pdf_file,
+            input_path=document_path,
             output_path=output_path,
             action="convert",
             will_overwrite=False,
@@ -369,29 +354,19 @@ def create_file_action(pdf_file: Path, output_path: Path, force: bool) -> FileAc
 
 
 def create_conversion_plan_pure(
-    pdf_files: list[Path],
+    document_paths: list[Path],
     input_path: Path,
     output_dir: Path,
     force: bool,
     clipboard: bool,
 ) -> ConversionPlan:
-    """Create a conversion plan from a list of PDF files (pure function).
+    """Create a conversion plan from supported documents (pure function)."""
 
-    Args:
-        pdf_files: List of PDF files to process
-        input_path: Original input path
-        output_dir: Resolved output directory
-        force: Whether to overwrite existing files
-        clipboard: Whether to copy to clipboard
-
-    Returns:
-        ConversionPlan describing what actions to take
-    """
     actions: list[FileAction] = []
 
-    for pdf_file in pdf_files:
-        output_path = calculate_output_path(pdf_file, input_path, output_dir)
-        action = create_file_action(pdf_file, output_path, force)
+    for document_path in document_paths:
+        output_path = calculate_output_path(document_path, input_path, output_dir)
+        action = create_file_action(document_path, output_path, force)
         actions.append(action)
 
     return ConversionPlan(
@@ -411,10 +386,10 @@ def create_conversion_plan(
     """Create a plan describing what actions will be taken."""
 
     resolved_output_dir = determine_output_directory(input_path, output_dir)
-    pdf_files = find_pdf_files(input_path)
+    document_paths = find_supported_documents(input_path)
 
     return create_conversion_plan_pure(
-        pdf_files=pdf_files,
+        document_paths=document_paths,
         input_path=input_path,
         output_dir=resolved_output_dir,
         force=force,
@@ -425,7 +400,10 @@ def create_conversion_plan(
 @app.command()
 def convert(
     input_path: Annotated[
-        Path, typer.Argument(help="Path to PDF file or directory containing PDFs")
+        Path,
+        typer.Argument(
+            help="Path to a document file or directory containing PDFs or images"
+        ),
     ],
     output_dir: Annotated[
         Path | None,
@@ -472,7 +450,7 @@ def convert(
         typer.Option("--cache-stats", help="Show cache statistics and exit"),
     ] = False,
 ) -> None:
-    """Convert PDF files to Markdown using Mistral OCR."""
+    """Convert documents to Markdown using Mistral OCR."""
     # Validate input path
     input_validation = validate_input_path(input_path)
     if not input_validation.is_valid:
@@ -589,10 +567,10 @@ def convert(
         )
 
     try:
-        pdf_files_to_process = [a.input_path for a in plan.files if a.is_converting]
-        results = process_pdf_files(
+        documents_to_process = [a.input_path for a in plan.files if a.is_converting]
+        results = process_documents(
             client,
-            pdf_files_to_process,
+            documents_to_process,
             plan.output_dir,
             plan.force,
             cache,

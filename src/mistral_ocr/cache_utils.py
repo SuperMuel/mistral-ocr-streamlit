@@ -144,8 +144,8 @@ class Cache:
         }
 
 
-def compute_pdf_hash(file_path: Path) -> str:
-    """Compute SHA-256 hash of a PDF file."""
+def compute_file_hash(file_path: Path) -> str:
+    """Compute SHA-256 hash of a file."""
     hasher = hashlib.sha256()
     with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
