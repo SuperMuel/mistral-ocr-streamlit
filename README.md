@@ -5,19 +5,19 @@ This project provides both a CLI tool and a Streamlit web interface for converti
 ## Features
 
 - **CLI Tool:**
-- Process single documents (PDFs or images) or entire directories.
+  - Process single documents (PDFs or images) or entire directories.
     - Specify output directory.
     - Option to force overwrite existing markdown files.
     - Dry run mode to preview which files will be converted or overwritten.
     - Progress bar for directory processing.
-- Local cache to avoid re-processing identical documents (disable with `--no-cache`).
-    - Read API key from `.env`, environment variable (`MISTRAL_API_KEY`), or command-line option.
-    - Copy extracted markdown to clipboard
+  - Local cache to avoid re-processing identical documents (disable with `--no-cache`).
+  - Read API key from `.env`, environment variable (`MISTRAL_API_KEY`), or command-line option.
+  - Copy extracted markdown to clipboard
 - **Web Interface (Streamlit):**
-- Upload local PDFs or images.
-- Process PDFs or images from URLs.
-    - Enter API key directly in the interface (also reads from `.env`/environment).
-    - View extracted markdown.
+  - Upload local PDFs or images.
+  - Process PDFs or images from URLs.
+  - Enter API key directly in the interface (also reads from `.env`/environment).
+  - View extracted markdown.
 
 ## Installation
 
