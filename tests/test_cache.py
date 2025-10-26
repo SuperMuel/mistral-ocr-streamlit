@@ -1,15 +1,15 @@
 from pathlib import Path
 from datetime import UTC, datetime
 
-from mistral_ocr.cache_utils import Cache, CacheEntry, compute_pdf_hash
+from mistral_ocr.cache_utils import Cache, CacheEntry, compute_file_hash
 from tests.test_utils import create_single_test_pdf
 
 
-def test_compute_pdf_hash_consistency(tmp_path: Path) -> None:
+def test_compute_file_hash_consistency(tmp_path: Path) -> None:
     pdf = tmp_path / "test.pdf"
     create_single_test_pdf(pdf, "hash test")
-    h1 = compute_pdf_hash(pdf)
-    h2 = compute_pdf_hash(pdf)
+    h1 = compute_file_hash(pdf)
+    h2 = compute_file_hash(pdf)
     assert h1 == h2
 
 
